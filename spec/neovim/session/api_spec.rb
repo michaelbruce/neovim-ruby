@@ -2,7 +2,7 @@ require "helper"
 
 module Neovim
   class Session
-    RSpec.describe API do
+    RSpec.xdescribe API do
       describe ".null" do
         it "returns an empty API object" do
           api = API.null

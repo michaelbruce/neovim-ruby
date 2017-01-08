@@ -48,10 +48,7 @@ module Neovim
       # Register msgpack ext types using the provided API and session
       def register_types(api, session)
         info("registering msgpack ext types")
-        api.types.each do |type, info|
-          klass = Neovim.const_get(type)
-          id = info.fetch("id")
-
+        api.each_ext_type do |klass, id|
           @unpacker.register_type(id) do |data|
             klass.new(MessagePack.unpack(data), session)
           end

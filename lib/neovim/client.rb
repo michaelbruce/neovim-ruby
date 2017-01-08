@@ -21,7 +21,7 @@ module Neovim
 
     # Intercept method calls and delegate to appropriate RPC methods.
     def method_missing(method_name, *args)
-      if func = @api.function("vim_#{method_name}")
+      if func = @api.method(self, method_name)
         func.call(@session, *args)
       else
         super
@@ -30,12 +30,12 @@ module Neovim
 
     # Extend +respond_to?+ to support RPC methods.
     def respond_to?(method_name)
-      super || rpc_methods.include?(method_name.to_sym)
+      super || @api.method_names(self).include?(method_name.to_sym)
     end
 
     # Extend +methods+ to include RPC methods.
     def methods
-      super | rpc_methods
+      super | @api.method_names(self)
     end
 
     # Access to objects belonging to the current +nvim+ context.
@@ -57,7 +57,7 @@ module Neovim
     # @example Return a list from VimL
     #   client.evaluate('[1, 2]') # => [1, 2]
     def evaluate(expr)
-      @api.function(:vim_eval).call(@session, expr)
+      @api.method(self, :eval).call(@session, expr)
     end
 
     # Display a message.
@@ -82,25 +82,15 @@ module Neovim
     #   client.set_option("timeoutlen=0")
     def set_option(*args)
       if args.size > 1
-        @api.function("vim_set_option").call(@session, *args)
+        @api.method(self, :set_option).call(@session, *args)
       else
-        @api.function("vim_command").call(@session, "set #{args.first}")
+        @api.method(self, :command).call(@session, "set #{args.first}")
       end
     end
 
     def shutdown
       @session.shutdown
     end
-
-    private
-
-    def rpc_methods
-      @api.functions_with_prefix("vim_").map do |func|
-        func.name.sub(/\Avim_/, "").to_sym
-      end
-    end
-
-    public
 
 # The following methods are dynamically generated.
 =begin

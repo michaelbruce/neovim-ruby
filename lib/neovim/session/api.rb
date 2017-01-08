@@ -1,3 +1,5 @@
+require "neovim/session/api/version"
+
 module Neovim
   class Session
     # @api private
@@ -7,60 +9,53 @@ module Neovim
       # Represents an unknown API. Used as a stand-in when the API hasn't been
       # discovered yet via the +vim_get_api_info+ RPC call.
       def self.null
-        new([nil, {"functions" => [], "types" => []}])
+        new([nil, {"version" => {}, "functions" => [], "types" => []}])
       end
 
       def initialize(payload)
-        @channel_id, @api_info = payload
+        @channel_id, api_info = payload
+        @methods = {}
+        @method_names = {}
+
+        @versions = Version.compatible(
+          api_info.fetch("version", {}),
+          api_info.fetch("types"),
+          api_info.fetch("functions")
+        )
       end
 
-      # Return all functions defined by the API.
-      def functions
-        @functions ||= @api_info.fetch("functions").inject({}) do |acc, func|
-          name, async = func.values_at("name", "async")
-          acc.merge(name => Function.new(name, async))
+      def each_ext_type(&block)
+        @versions.first.each_ext_type(&block)
+      end
+
+      def methods(target)
+        @methods.fetch(target.class) do |klass|
+          @methods[klass] = @versions.inject([]) do |acc, vers|
+            acc | vers.methods(target)
+          end
         end
       end
 
-      # Return information about +nvim+ types. Used for registering MessagePack
-      # +ext+ types.
-      def types
-        @types ||= @api_info.fetch("types")
-      end
-
-      # Return a list of functions with the given name prefix.
-      def functions_with_prefix(prefix)
-        functions.inject([]) do |acc, (name, function)|
-          name =~ /\A#{prefix}/ ? acc.push(function) : acc
+      def method_names(target)
+        @method_names.fetch(target.class) do |klass|
+          @method_names[klass] = @versions.inject([]) do |acc, vers|
+            acc | vers.method_names(target)
+          end
         end
       end
 
-      # Find a function with the given name.
-      def function(name)
-        functions[name.to_s]
+      def method(target, name)
+        @versions.each do |vers|
+          _method = vers.method(target, name)
+          return(_method) if _method
+        end
+
+        nil
       end
 
       # Truncate the output of inspect so console sessions are more pleasant.
       def inspect
         "#<#{self.class}:0x%x @types={...} @functions={...}>" % (object_id << 1)
-      end
-
-      class Function
-        attr_reader :name, :async
-
-        def initialize(name, async)
-          @name, @async = name, async
-        end
-
-        # Apply this function to a running RPC session. Sends either a request if
-        # +async+ is +false+ or a notification if +async+ is +true+.
-        def call(session, *args)
-          if async
-            session.notify(name, *args)
-          else
-            session.request(name, *args)
-          end
-        end
       end
     end
   end
