@@ -66,7 +66,7 @@ RSpec.configure do |config|
     Support.setup_workspace
 
     begin
-      Timeout.timeout(5) { spec.run }
+      Timeout.timeout(nil) { spec.run }
     ensure
       Support.teardown_workspace
     end

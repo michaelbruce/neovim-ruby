@@ -14,43 +14,43 @@ module Neovim
 
       def initialize(payload)
         @channel_id, api_info = payload
-        @methods = {}
+        @types, @functions = api_info.values_at("types", "functions")
         @method_names = {}
+        @methods = {}
 
-        @versions = Version.compatible(
-          api_info.fetch("version", {}),
-          api_info.fetch("types"),
-          api_info.fetch("functions")
-        )
+        @version = Version.new(api_info.fetch("version", {}))
       end
 
-      def each_ext_type(&block)
-        @versions.first.each_ext_type(&block)
+      def each_ext_type
+        @types.each do |name, info|
+          klass = Neovim.const_get(name)
+          id = info.fetch("id")
+
+          yield(klass, id) if block_given?
+        end
       end
 
       def methods(target)
         @methods.fetch(target.class) do |klass|
-          @methods[klass] = @versions.inject([]) do |acc, vers|
-            acc | vers.methods(target)
+          @methods[klass] = @functions.inject({}) do |acc, func_def|
+            if level = @version.applicable_to(target, func_def, @types)
+              method_name, function = level.build_function
+              acc.merge(method_name => function)
+            else
+              acc
+            end
           end
         end
       end
 
       def method_names(target)
         @method_names.fetch(target.class) do |klass|
-          @method_names[klass] = @versions.inject([]) do |acc, vers|
-            acc | vers.method_names(target)
-          end
+          @method_names[klass] = methods(target).keys
         end
       end
 
       def method(target, name)
-        @versions.each do |vers|
-          _method = vers.method(target, name)
-          return(_method) if _method
-        end
-
-        nil
+        methods(target).fetch(name, nil)
       end
 
       # Truncate the output of inspect so console sessions are more pleasant.
