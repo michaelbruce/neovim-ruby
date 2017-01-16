@@ -35,6 +35,12 @@ module Support
     File.join(workspace, name)
   end
 
+  def self.directory(name)
+    file_path(name).tap do |dir|
+      FileUtils.mkdir_p(dir)
+    end
+  end
+
   def self.setup_workspace
     FileUtils.mkdir_p(workspace)
   end

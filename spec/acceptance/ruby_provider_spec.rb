@@ -65,6 +65,19 @@ RSpec.describe "ruby_provider" do
         nvim.eval("rpcrequest(host, 'ruby_execute', 'puts \"12\"')")
       }.not_to raise_error
     end
+
+    it "respects directory changes" do
+      orig_dir = nvim.eval("getcwd()")
+      next_dir = Support.directory("new_dir")
+      ruby = "Vim.command(\"let g:mydir = \#{Dir.pwd.inspect}\")".inspect
+
+      nvim.eval("rpcrequest(host, 'ruby_execute', #{ruby})")
+      expect(nvim.eval("g:mydir")).to eq(orig_dir)
+
+      nvim.command("cd #{next_dir}")
+      nvim.eval("rpcrequest(host, 'ruby_execute', #{ruby})")
+      expect(nvim.eval("g:mydir")).to eq(next_dir)
+    end
   end
 
   describe "ruby_execute_file" do
@@ -147,6 +160,19 @@ RSpec.describe "ruby_provider" do
       expect {
         nvim.eval("rpcrequest(host, 'ruby_execute_file', '#{script_path}')")
       }.not_to raise_error
+    end
+
+    it "respects directory changes" do
+      File.write(script_path, 'Vim.command("let g:mydir = #{Dir.pwd.inspect}")')
+      orig_dir = nvim.eval("getcwd()")
+      next_dir = Support.directory("new_dir")
+
+      nvim.eval("rpcrequest(host, 'ruby_execute_file', '#{script_path}')")
+      expect(nvim.eval("g:mydir")).to eq(orig_dir)
+
+      nvim.command("cd #{next_dir}")
+      nvim.eval("rpcrequest(host, 'ruby_execute_file', '#{script_path}')")
+      expect(nvim.eval("g:mydir")).to eq(next_dir)
     end
   end
 

@@ -10,6 +10,7 @@ module Neovim
   # @api private
   module RubyProvider
     @__buffer_cache = {}
+    @__working_directories = {:global => Dir.pwd, :local => Hash.new({})}
 
     def self.__define_plugin!
       Thread.abort_on_exception = true
@@ -18,6 +19,7 @@ module Neovim
         __define_ruby_execute(plug)
         __define_ruby_execute_file(plug)
         __define_ruby_do_range(plug)
+        __define_dir_changed(plug)
       end
     end
 
@@ -71,14 +73,36 @@ module Neovim
     end
     private_class_method :__define_ruby_do_range
 
+    def self.__define_dir_changed(plug)
+      opts = {
+        :pattern => "*",
+        :eval => "[v:event, tabpagenr(), winnr()]"
+      }
+
+      plug.autocmd(:DirChanged, opts) do |nvim, (event, tabnr, winnr)|
+        scope, cwd = event.values_at("scope", "cwd")
+
+        case scope
+        when "global"
+          @__working_directories[:global] = cwd
+        when "window", "tab"
+          @__working_directories[:local][tabnr][winnr] = cwd
+        end
+      end
+    end
+
     def self.__wrap_client(client)
-      __with_globals(client) do
+      bufnr, winnr, tabnr = client.evaluate("[bufnr('%'), winnr(), tabpagenr()]")
+
+      __with_globals(client, bufnr) do
         __with_vim_constant(client) do
           __with_redirect_streams(client) do
-            begin
-              yield
-            rescue SyntaxError => e
-              client.err_write(e.message)
+            __with_working_directory(client, tabnr, winnr) do
+              begin
+                yield
+              rescue SyntaxError => e
+                client.err_write(e.message)
+              end
             end
           end
         end
@@ -87,9 +111,7 @@ module Neovim
     end
     private_class_method :__wrap_client
 
-    def self.__with_globals(client)
-      bufnr = client.evaluate("bufnr('%')")
-
+    def self.__with_globals(client, bufnr)
       $curbuf = @__buffer_cache.fetch(bufnr) do
         @__buffer_cache[bufnr] = client.get_current_buffer
       end
@@ -122,6 +144,14 @@ module Neovim
       yield
     end
     private_class_method :__with_redirect_streams
+
+    def self.__with_working_directory(client, tabnr, winnr)
+      dir = @__working_directories[:local][tabnr][winnr] ||
+        @__working_directories[:global]
+
+      Dir.chdir(dir) { yield }
+    end
+    private_class_method :__with_working_directory
 
     def self.__update_lines_in_chunks(buffer, start, stop, size)
       (start..stop).each_slice(size) do |linenos|
