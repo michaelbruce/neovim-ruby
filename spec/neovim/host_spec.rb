@@ -4,7 +4,7 @@ require "neovim/host"
 module Neovim
   RSpec.describe Host do
     let(:session) { instance_double(Session) }
-    let(:client) { instance_double(Client) }
+    let(:client) { instance_double(Client, :pwd => "/tmp") }
     let(:host) { Host.new(session, client) }
 
     describe ".run" do

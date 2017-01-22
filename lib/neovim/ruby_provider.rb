@@ -10,7 +10,6 @@ module Neovim
   # @api private
   module RubyProvider
     @__buffer_cache = {}
-    @__working_directories = {:global => Dir.pwd, :local => Hash.new({})}
 
     def self.__define_plugin!
       Thread.abort_on_exception = true
@@ -97,12 +96,10 @@ module Neovim
       __with_globals(client, bufnr) do
         __with_vim_constant(client) do
           __with_redirect_streams(client) do
-            __with_working_directory(client, tabnr, winnr) do
-              begin
-                yield
-              rescue SyntaxError => e
-                client.err_write(e.message)
-              end
+            begin
+              yield
+            rescue SyntaxError => e
+              client.err_write(e.message)
             end
           end
         end
@@ -144,14 +141,6 @@ module Neovim
       yield
     end
     private_class_method :__with_redirect_streams
-
-    def self.__with_working_directory(client, tabnr, winnr)
-      dir = @__working_directories[:local][tabnr][winnr] ||
-        @__working_directories[:global]
-
-      Dir.chdir(dir) { yield }
-    end
-    private_class_method :__with_working_directory
 
     def self.__update_lines_in_chunks(buffer, start, stop, size)
       (start..stop).each_slice(size) do |linenos|

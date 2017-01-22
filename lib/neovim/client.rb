@@ -88,6 +88,13 @@ module Neovim
       end
     end
 
+    # Get the current working directory
+    #
+    # @return [String]
+    def pwd
+      @session.request(:vim_eval, "getcwd()")
+    end
+
     def shutdown
       @session.shutdown
     end
